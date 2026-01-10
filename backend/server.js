@@ -45,8 +45,15 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // In production, use specific CLIENT_URL
-    if (origin === process.env.CLIENT_URL) {
+    // In production, check against allowed origins
+    const allowedOrigins = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(url => url.trim()) : [];
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Also check if origin matches Vercel pattern
+    if (origin && (origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com'))) {
       return callback(null, true);
     }
 
