@@ -1,0 +1,30 @@
+services:
+  # Backend API
+  - type: web
+    name: chitfund-backend
+    env: node
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        value: mongodb+srv://tamil916:tamil916@myfirstcluster.ekypa1m.mongodb.net/chitfund
+      - key: JWT_SECRET
+        value: 44de90bf1010ad0c8d6457fba7239a96b1b756e1515e0b9dfb029a4e116387fd
+      - key: JWT_EXPIRE
+        value: 30d
+      - key: BCRYPT_ROUNDS
+        value: 10
+      - key: RATE_LIMIT_WINDOW
+        value: 15
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 1000
+      - key: CLIENT_URL
+        value: https://chitfund-app.vercel.app
