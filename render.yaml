@@ -16,7 +16,7 @@ services:
       - key: PORT
         value: "10000"
       - key: MONGODB_URI
-        value: mongodb+srv://tamil916:tamil916@myfirstcluster.ekypa1m.mongodb.net/chitfund
+        value: mongodb+srv://tamil916:amTamil916@myfirstcluster.ekypa1m.mongodb.net/chitfund
       - key: JWT_SECRET
         value: 44de90bf1010ad0c8d6457fba7239a96b1b756e1515e0b9dfb029a4e116387fd
       - key: JWT_EXPIRE
