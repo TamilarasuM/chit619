@@ -120,6 +120,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/audit', require('./routes/audit'));
+app.use('/api/seed', require('./routes/seed')); // One-time seed endpoint
 
 // 404 handler - must be after all routes
 app.use(notFound);
