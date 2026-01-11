@@ -40,7 +40,7 @@ const seedData = async () => {
     console.log('\nCreating admin user...'.cyan);
     const admin = await User.create({
       name: 'Admin User',
-      phone: '9876543210',
+      phone: '9942891022',
       email: 'admin@chitfund.com',
       password: 'admin123',
       role: 'admin',
@@ -404,7 +404,7 @@ const seedData = async () => {
     console.log(`2. ${chitGroup2.name} - Active (${chitGroup2.completedAuctions}/${chitGroup2.duration} auctions)`.white);
     console.log(`3. ${chitGroup3.name} - InProgress (Not started)`.white);
     console.log('\nTest Credentials:'.yellow.bold);
-    console.log('Admin: 9876543210 / admin123'.white);
+    console.log('Admin: 9942891022 / admin123'.white);
     members.forEach(m => {
       console.log(`Member: ${m.phone} / member123`.white);
     });

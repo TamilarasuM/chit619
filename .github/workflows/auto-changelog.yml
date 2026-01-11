@@ -1,0 +1,82 @@
+name: Update Changelog
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  update-changelog:
+    name: Update CHANGELOG.md
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Create or update CHANGELOG.md
+          if [ ! -f CHANGELOG.md ]; then
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "All notable changes to this project will be documented in this file." >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          fi
+
+          # Get latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No tags found, skipping changelog update"
+            exit 0
+          fi
+
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^$LATEST_TAG$" | head -1)
+
+          # Generate changelog entry
+          echo "" > temp_changelog.md
+          echo "## [$LATEST_TAG] - $(date +%Y-%m-%d)" >> temp_changelog.md
+          echo "" >> temp_changelog.md
+
+          # Group commits by type
+          echo "### Features" >> temp_changelog.md
+          git log $PREV_TAG..$LATEST_TAG --pretty=format:"%s" --grep="^feat" 2>/dev/null | sed 's/^feat: /- /' >> temp_changelog.md || true
+          echo "" >> temp_changelog.md
+
+          echo "### Bug Fixes" >> temp_changelog.md
+          git log $PREV_TAG..$LATEST_TAG --pretty=format:"%s" --grep="^fix" 2>/dev/null | sed 's/^fix: /- /' >> temp_changelog.md || true
+          echo "" >> temp_changelog.md
+
+          echo "### Documentation" >> temp_changelog.md
+          git log $PREV_TAG..$LATEST_TAG --pretty=format:"%s" --grep="^docs" 2>/dev/null | sed 's/^docs: /- /' >> temp_changelog.md || true
+          echo "" >> temp_changelog.md
+
+          echo "### Other Changes" >> temp_changelog.md
+          git log $PREV_TAG..$LATEST_TAG --pretty=format:"%s" --invert-grep --grep="^feat" --grep="^fix" --grep="^docs" 2>/dev/null | sed 's/^/- /' >> temp_changelog.md || true
+          echo "" >> temp_changelog.md
+
+          # Prepend to existing changelog
+          cat CHANGELOG.md >> temp_changelog.md
+          mv temp_changelog.md CHANGELOG.md
+
+      - name: Commit changelog
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          git add CHANGELOG.md
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: update CHANGELOG.md"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main

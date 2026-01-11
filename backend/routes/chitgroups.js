@@ -672,12 +672,9 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
       });
     }
 
-    // Only allow deletion of InProgress chit groups to prevent data loss
-    if (chitGroup.status !== 'InProgress') {
-      return res.status(400).json({
-        success: false,
-        error: 'Only chit groups in "InProgress" status can be deleted. Active or Closed chit groups cannot be deleted to maintain data integrity.'
-      });
+    // Warn if deleting Active or Closed chit group (but allow it)
+    if (chitGroup.status === 'Active' || chitGroup.status === 'Closed') {
+      console.log(`⚠️ WARNING: Deleting ${chitGroup.status} chit group "${chitGroup.name}". This will delete all associated data.`);
     }
 
     // Store data for audit log before deletion
@@ -690,6 +687,18 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
     };
 
     const chitGroupId = chitGroup._id;
+
+    // Cascade delete related data
+    const Auction = require('../models/Auction');
+    const Payment = require('../models/Payment');
+
+    // Delete all auctions for this chit group
+    const auctionsResult = await Auction.deleteMany({ chitGroupId: chitGroupId });
+    console.log(`Deleted ${auctionsResult.deletedCount} auctions for chit group ${chitGroupId}`);
+
+    // Delete all payments for this chit group
+    const paymentsResult = await Payment.deleteMany({ chitGroupId: chitGroupId });
+    console.log(`Deleted ${paymentsResult.deletedCount} payments for chit group ${chitGroupId}`);
 
     // Remove chit group from all members' chitGroups array
     const memberIds = chitGroup.members.map(m => m.memberId);
@@ -712,7 +721,11 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
       entity: 'ChitGroup',
       entityId: chitGroupId,
       changes: {
-        before: chitGroupData,
+        before: {
+          ...chitGroupData,
+          auctionsDeleted: auctionsResult.deletedCount,
+          paymentsDeleted: paymentsResult.deletedCount
+        },
         after: null
       },
       ipAddress: req.ip || req.connection.remoteAddress,
@@ -723,7 +736,12 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'Chit group deleted successfully'
+      message: 'Chit group and all associated data deleted successfully',
+      deletedData: {
+        auctions: auctionsResult.deletedCount,
+        payments: paymentsResult.deletedCount,
+        members: memberIds.length
+      }
     });
   } catch (error) {
     console.error('Delete chit group error:', error);

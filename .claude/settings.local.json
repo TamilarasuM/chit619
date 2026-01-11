@@ -44,7 +44,18 @@
       "Bash(cp:*)",
       "Bash(npm run recalculate:*)",
       "Bash(powershell -Command \"Get-Content ''backend\\\\routes\\\\auctions.js'' | Measure-Object -Line\")",
-      "Bash(npm run seed:*)"
+      "Bash(npm run seed:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(vercel login)",
+      "Bash(vercel:*)",
+      "Bash(for file in backend/routes/*.js)",
+      "Bash(do node -c \"$file\")",
+      "Bash(done)",
+      "Bash(for file in backend/models/*.js)",
+      "Bash(grep:*)",
+      "Bash(npm run create-admin:*)"
     ],
     "deny": [],
     "ask": []

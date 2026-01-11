@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import AdminLayout from '../../components/layout/AdminLayout';
 import { Card } from '../../components/common';
@@ -6,6 +7,7 @@ import axios from 'axios';
 import api from '../../services/api';
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
   const [membersData, setMembersData] = useState(null);

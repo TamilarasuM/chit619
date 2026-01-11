@@ -21,6 +21,9 @@ const ChitGroupDetails = () => {
   const [payments, setPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [groupedPayments, setGroupedPayments] = useState({});
+  const [selectedAuction, setSelectedAuction] = useState('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
+  const [selectedMember, setSelectedMember] = useState('all');
 
   useEffect(() => {
     if (id) {
@@ -592,17 +595,105 @@ const ChitGroupDetails = () => {
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Payment Overview</h3>
-                <button
-                  onClick={() => navigate(`/payments/record?chitGroupId=${id}`)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Record Payment
-                </button>
+              <div className="mb-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Payment Overview</h3>
+                  <button
+                    onClick={() => navigate(`/payments/record?chitGroupId=${id}`)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Record Payment
+                  </button>
+                </div>
+
+                {/* Filters Row */}
+                <div className="flex items-center space-x-4 bg-gray-50 p-3 rounded-lg">
+                  {/* Auction Filter Dropdown */}
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700">Auction:</label>
+                    <select
+                      value={selectedAuction}
+                      onChange={(e) => setSelectedAuction(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="all">All Auctions</option>
+                      {Object.keys(groupedPayments).sort((a, b) => parseInt(b) - parseInt(a)).map((auctionNum) => (
+                        <option key={auctionNum} value={auctionNum}>
+                          Auction #{auctionNum}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Member Filter Dropdown */}
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700">Member:</label>
+                    <select
+                      value={selectedMember}
+                      onChange={(e) => setSelectedMember(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[180px]"
+                    >
+                      <option value="all">All Members</option>
+                      {(() => {
+                        // Get unique members from payments
+                        const uniqueMembers = Array.from(
+                          new Map(
+                            payments.map(p => [
+                              p.memberId?._id || p.memberId,
+                              {
+                                id: p.memberId?._id || p.memberId,
+                                name: p.memberId?.name || p.memberName || 'Unknown',
+                                phone: p.memberId?.phone || ''
+                              }
+                            ])
+                          ).values()
+                        ).sort((a, b) => a.name.localeCompare(b.name));
+
+                        return uniqueMembers.map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.name} {member.phone ? `(${member.phone})` : ''}
+                          </option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
+
+                  {/* Payment Status Filter */}
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700">Status:</label>
+                    <select
+                      value={paymentStatusFilter}
+                      onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Partial">Partial</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Overdue">Overdue</option>
+                    </select>
+                  </div>
+
+                  {/* Clear Filters Button */}
+                  {(selectedAuction !== 'all' || selectedMember !== 'all' || paymentStatusFilter !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setSelectedAuction('all');
+                        setSelectedMember('all');
+                        setPaymentStatusFilter('all');
+                      }}
+                      className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
               </div>
 
               {paymentsLoading ? (
@@ -616,39 +707,102 @@ const ChitGroupDetails = () => {
               ) : (
                 <div className="space-y-6">
                   {/* Payment Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <div className="text-sm font-medium text-gray-500">Total Due</div>
-                      <div className="mt-1 text-xl font-bold text-gray-900">
-                        {formatCurrency(payments.reduce((sum, p) => sum + p.dueAmount, 0))}
+                  {(() => {
+                    // Filter payments based on selected auction, member, and status
+                    const filteredPayments = payments.filter(payment => {
+                      const auctionMatch = selectedAuction === 'all' || payment.auctionNumber?.toString() === selectedAuction;
+                      const memberMatch = selectedMember === 'all' || (payment.memberId?._id || payment.memberId) === selectedMember;
+                      const statusMatch = paymentStatusFilter === 'all' || payment.paymentStatus === paymentStatusFilter;
+                      return auctionMatch && memberMatch && statusMatch;
+                    });
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-blue-50 rounded-lg p-4">
+                          <div className="text-sm font-medium text-gray-500">Total Due</div>
+                          <div className="mt-1 text-xl font-bold text-gray-900">
+                            {formatCurrency(filteredPayments.reduce((sum, p) => sum + p.dueAmount, 0))}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {filteredPayments.length} payment(s)
+                          </div>
+                        </div>
+                        <div className="bg-green-50 rounded-lg p-4">
+                          <div className="text-sm font-medium text-gray-500">Total Paid</div>
+                          <div className="mt-1 text-xl font-bold text-green-700">
+                            {formatCurrency(filteredPayments.reduce((sum, p) => sum + p.paidAmount, 0))}
+                          </div>
+                        </div>
+                        <div className="bg-yellow-50 rounded-lg p-4">
+                          <div className="text-sm font-medium text-gray-500">Outstanding</div>
+                          <div className="mt-1 text-xl font-bold text-yellow-700">
+                            {formatCurrency(filteredPayments.reduce((sum, p) => sum + p.outstandingBalance, 0))}
+                          </div>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-4">
+                          <div className="text-sm font-medium text-gray-500">Total Dividends</div>
+                          <div className="mt-1 text-xl font-bold text-purple-700">
+                            {formatCurrency(filteredPayments.reduce((sum, p) => sum + p.dividendReceived, 0))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-4">
-                      <div className="text-sm font-medium text-gray-500">Total Paid</div>
-                      <div className="mt-1 text-xl font-bold text-green-700">
-                        {formatCurrency(payments.reduce((sum, p) => sum + p.paidAmount, 0))}
-                      </div>
-                    </div>
-                    <div className="bg-yellow-50 rounded-lg p-4">
-                      <div className="text-sm font-medium text-gray-500">Outstanding</div>
-                      <div className="mt-1 text-xl font-bold text-yellow-700">
-                        {formatCurrency(payments.reduce((sum, p) => sum + p.outstandingBalance, 0))}
-                      </div>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-4">
-                      <div className="text-sm font-medium text-gray-500">Total Dividends</div>
-                      <div className="mt-1 text-xl font-bold text-purple-700">
-                        {formatCurrency(payments.reduce((sum, p) => sum + p.dividendReceived, 0))}
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Payments grouped by auction */}
-                  {Object.keys(groupedPayments).sort((a, b) => parseInt(b) - parseInt(a)).map((auctionNum) => {
-                    const auctionPayments = groupedPayments[auctionNum];
+                  {Object.keys(groupedPayments)
+                    .sort((a, b) => parseInt(b) - parseInt(a))
+                    .filter(auctionNum => selectedAuction === 'all' || auctionNum === selectedAuction)
+                    .map((auctionNum) => {
+                    const auctionPayments = groupedPayments[auctionNum].filter(payment => {
+                      const memberMatch = selectedMember === 'all' || (payment.memberId?._id || payment.memberId) === selectedMember;
+                      const statusMatch = paymentStatusFilter === 'all' || payment.paymentStatus === paymentStatusFilter;
+                      return memberMatch && statusMatch;
+                    });
+
+                    // Skip this auction if no payments match the filter
+                    if (auctionPayments.length === 0) return null;
+
                     const auctionTotal = auctionPayments.reduce((sum, p) => sum + p.dueAmount, 0);
                     const auctionPaid = auctionPayments.reduce((sum, p) => sum + p.paidAmount, 0);
                     const auctionOutstanding = auctionPayments.reduce((sum, p) => sum + p.outstandingBalance, 0);
+
+                    // Calculate rankings based on payment timeliness
+                    const rankedPayments = auctionPayments.map(payment => {
+                      let score = 0;
+                      let rankLabel = '';
+                      let rankColor = '';
+
+                      if (payment.paymentStatus === 'Paid') {
+                        // Check if paid on time (before or on due date)
+                        const dueDate = new Date(payment.dueDate);
+                        const paidDate = payment.paymentDate ? new Date(payment.paymentDate) : new Date();
+
+                        if (paidDate <= dueDate) {
+                          score = 100; // Paid on time
+                          rankLabel = '⭐ On Time';
+                          rankColor = 'text-green-600 bg-green-50';
+                        } else {
+                          score = 75; // Paid but late
+                          rankLabel = '✓ Paid Late';
+                          rankColor = 'text-blue-600 bg-blue-50';
+                        }
+                      } else if (payment.paymentStatus === 'Partial') {
+                        score = 50;
+                        rankLabel = '◐ Partial';
+                        rankColor = 'text-yellow-600 bg-yellow-50';
+                      } else if (payment.paymentStatus === 'Overdue') {
+                        score = 0;
+                        rankLabel = '⚠ Overdue';
+                        rankColor = 'text-red-600 bg-red-50';
+                      } else {
+                        score = 25;
+                        rankLabel = '○ Pending';
+                        rankColor = 'text-gray-600 bg-gray-50';
+                      }
+
+                      return { ...payment, score, rankLabel, rankColor };
+                    }).sort((a, b) => b.score - a.score); // Sort by score descending
 
                     return (
                       <div key={auctionNum} className="border rounded-lg overflow-hidden">
@@ -676,6 +830,9 @@ const ChitGroupDetails = () => {
                             <thead className="bg-gray-50">
                               <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                  Rank
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                   Member
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -699,14 +856,29 @@ const ChitGroupDetails = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                   Status
                                 </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                  Payment Performance
+                                </th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                                   Actions
                                 </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                              {auctionPayments.map((payment) => (
+                              {rankedPayments.map((payment, index) => (
                                 <tr key={payment._id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <div className={`text-2xl font-bold ${
+                                        index === 0 ? 'text-yellow-500' :
+                                        index === 1 ? 'text-gray-400' :
+                                        index === 2 ? 'text-orange-600' :
+                                        'text-gray-300'
+                                      }`}>
+                                        {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
+                                      </div>
+                                    </div>
+                                  </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="text-sm font-medium text-gray-900">
                                       {payment.memberId?.name || payment.memberName || 'Unknown'}
@@ -735,6 +907,11 @@ const ChitGroupDetails = () => {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     {getPaymentStatusBadge(payment.paymentStatus)}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${payment.rankColor}`}>
+                                      {payment.rankLabel}
+                                    </span>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                                     {payment.outstandingBalance > 0 && (

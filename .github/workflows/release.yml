@@ -1,0 +1,107 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "## Changes" > CHANGELOG.md
+
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^${{ steps.version.outputs.tag }}$" | head -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "First release" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          else
+            echo "Changes since $PREV_TAG:" >> CHANGELOG.md
+            git log $PREV_TAG..${{ steps.version.outputs.tag }} --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          fi
+
+          echo "" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## Contributors" >> CHANGELOG.md
+          git log $PREV_TAG..${{ steps.version.outputs.tag }} --pretty=format:"- @%an" 2>/dev/null | sort -u >> CHANGELOG.md || echo "- Initial release" >> CHANGELOG.md
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          cd ..
+
+      - name: Create release archive
+        run: |
+          mkdir -p release-artifacts
+
+          # Create backend archive (without node_modules)
+          tar -czf release-artifacts/backend-${{ steps.version.outputs.version }}.tar.gz \
+            --exclude=node_modules \
+            --exclude=.env \
+            backend/ package.json package-lock.json render.yaml render-build.sh
+
+          # Create frontend build archive
+          tar -czf release-artifacts/frontend-${{ steps.version.outputs.version }}.tar.gz \
+            frontend/dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: |
+            release-artifacts/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest tag
+        run: |
+          git tag -f latest
+          git push origin latest --force
+
+  notify-release:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: create-release
+
+    steps:
+      - name: Release notification
+        run: |
+          echo "🎉 Release ${{ needs.create-release.outputs.version }} created successfully!"
+          echo "View at: https://github.com/${{ github.repository }}/releases/tag/${{ needs.create-release.outputs.tag }}"

@@ -788,21 +788,25 @@ const AuctionControl = () => {
 
               {/* Pending Payments Section */}
               {paymentData.payments.filter(p =>
-                p.paymentStatus === 'Pending' ||
-                p.paymentStatus === 'Partial' ||
-                p.paymentStatus === 'Overdue'
+                !p.isWinner && (
+                  p.paymentStatus === 'Pending' ||
+                  p.paymentStatus === 'Partial' ||
+                  p.paymentStatus === 'Overdue'
+                )
               ).length > 0 && (
                 <div className="bg-white rounded-lg shadow overflow-hidden border-l-4 border-yellow-500">
                   <div className="px-6 py-4 border-b border-gray-200 bg-yellow-50">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-lg font-semibold text-yellow-900">Pending Payments</h3>
+                        <h3 className="text-lg font-semibold text-yellow-900">Pending Payments (Non-Winners)</h3>
                         <p className="text-sm text-yellow-700 mt-1">
                           {paymentData.payments.filter(p =>
-                            p.paymentStatus === 'Pending' ||
-                            p.paymentStatus === 'Partial' ||
-                            p.paymentStatus === 'Overdue'
-                          ).length} member(s) have outstanding payments
+                            !p.isWinner && (
+                              p.paymentStatus === 'Pending' ||
+                              p.paymentStatus === 'Partial' ||
+                              p.paymentStatus === 'Overdue'
+                            )
+                          ).length} member(s) have outstanding payments (winner excluded)
                         </p>
                       </div>
                     </div>
@@ -823,9 +827,11 @@ const AuctionControl = () => {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {paymentData.payments
                           .filter(p =>
-                            p.paymentStatus === 'Pending' ||
-                            p.paymentStatus === 'Partial' ||
-                            p.paymentStatus === 'Overdue'
+                            !p.isWinner && (
+                              p.paymentStatus === 'Pending' ||
+                              p.paymentStatus === 'Partial' ||
+                              p.paymentStatus === 'Overdue'
+                            )
                           )
                           .map((payment) => (
                             <tr key={payment._id} className={`hover:bg-gray-50 ${
