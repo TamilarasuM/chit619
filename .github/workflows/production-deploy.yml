@@ -9,6 +9,8 @@ on:
 
 env:
   NODE_VERSION: '18.x'
+  RENDER_BACKEND_URL: 'https://chitfund-backend.onrender.com'
+  VERCEL_FRONTEND_URL: 'https://frontend-bgyznqtl3-tamils-projects-ec5a19e3.vercel.app'
 
 jobs:
   # Detect which parts of the codebase changed
@@ -127,7 +129,6 @@ jobs:
     if: needs.detect-changes.outputs.backend == 'true' && success()
     environment:
       name: production-backend
-      url: ${{ secrets.RENDER_BACKEND_URL }}
 
     steps:
       - name: Trigger Render deployment
@@ -143,7 +144,7 @@ jobs:
         run: |
           MAX_RETRIES=10
           RETRY_COUNT=0
-          HEALTH_URL="${{ secrets.RENDER_BACKEND_URL }}/health"
+          HEALTH_URL="${{ env.RENDER_BACKEND_URL }}/health"
 
           echo "Checking health endpoint: $HEALTH_URL"
 
@@ -171,7 +172,6 @@ jobs:
     if: needs.detect-changes.outputs.frontend == 'true' && success()
     environment:
       name: production-frontend
-      url: ${{ secrets.VERCEL_FRONTEND_URL }}
 
     steps:
       - name: Checkout code
@@ -197,7 +197,7 @@ jobs:
       - name: Verify deployment
         run: |
           sleep 20
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.VERCEL_FRONTEND_URL }}" || echo "000")
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.VERCEL_FRONTEND_URL }}" || echo "000")
 
           if [ "$HTTP_CODE" = "200" ]; then
             echo "✅ Frontend is live (HTTP $HTTP_CODE)"
