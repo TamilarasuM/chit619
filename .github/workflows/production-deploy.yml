@@ -9,7 +9,7 @@ on:
 
 env:
   NODE_VERSION: '18.x'
-  RENDER_BACKEND_URL: 'https://chitfund-backend.onrender.com'
+  RENDER_BACKEND_URL: 'https://chitfund-backend-o5px.onrender.com'
   VERCEL_FRONTEND_URL: 'https://frontend-bgyznqtl3-tamils-projects-ec5a19e3.vercel.app'
 
 jobs:
