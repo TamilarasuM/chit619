@@ -85,8 +85,18 @@ jobs:
       - name: Check for secrets
         run: |
           echo "Scanning for potential secrets in code..."
-          if grep -r -i -E "(password|secret|api[_-]?key|token)\s*=\s*['\"][^'\"]+['\"]" backend/ frontend/src --exclude-dir=node_modules; then
-            echo "⚠️ Potential secrets found!"
+          # Exclude common false positives: error messages, mock tokens, validation messages
+          RESULTS=$(grep -r -i -E "(password|secret|api[_-]?key|token)\s*=\s*['\"][^'\"]+['\"]" backend/ frontend/src --exclude-dir=node_modules | \
+            grep -v "newErrors\." | \
+            grep -v "mock_token_" | \
+            grep -v "Password is required" | \
+            grep -v "Password must be" | \
+            grep -v "test-secret" | \
+            grep -v "example-token" || true)
+
+          if [ -n "$RESULTS" ]; then
+            echo "⚠️ Potential secrets found:"
+            echo "$RESULTS"
             exit 1
           else
             echo "✅ No hardcoded secrets detected"
