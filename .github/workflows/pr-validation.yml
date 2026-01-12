@@ -71,7 +71,7 @@ jobs:
           JWT_SECRET: test-secret-key-for-ci-only
 
       - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage/lcov.info
           flags: backend
