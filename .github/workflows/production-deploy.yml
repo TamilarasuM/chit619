@@ -10,7 +10,7 @@ on:
 env:
   NODE_VERSION: '18.x'
   RENDER_BACKEND_URL: 'https://chitfund-backend-o5px.onrender.com'
-  VERCEL_FRONTEND_URL: 'https://frontend-bgyznqtl3-tamils-projects-ec5a19e3.vercel.app'
+  VERCEL_FRONTEND_URL: 'https://frontend-five-topaz-22.vercel.app'
 
 jobs:
   # Detect which parts of the codebase changed

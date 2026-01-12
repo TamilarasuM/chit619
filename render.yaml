@@ -28,4 +28,4 @@ services:
       - key: RATE_LIMIT_MAX_REQUESTS
         value: "1000"
       - key: CLIENT_URL
-        value: https://frontend-bgyznqtl3-tamils-projects-ec5a19e3.vercel.app
+        value: https://frontend-five-topaz-22.vercel.app
