@@ -186,44 +186,58 @@ const AdminDashboard = () => {
     );
   };
 
-  const handleCreateChit = (e) => {
+  const handleCreateChit = async (e) => {
     e.preventDefault();
     const monthlyContribution = calculateMonthlyContribution();
-    const endDate = calculateEndDate();
-    const selectedMemberNames = membersData
-      ?.filter(m => newChit.selectedMembers.includes(m._id))
-      .map(m => m.name)
-      .join(', ') || 'No members selected';
+    const chitAmount = parseInt(newChit.chitAmount);
+    const commissionAmount = Math.round((chitAmount * parseInt(newChit.commissionRate)) / 100);
 
-    alert(`Creating New Chit Group:\n\n` +
-      `Name: ${newChit.name}\n` +
-      `Amount: ₹${parseInt(newChit.chitAmount).toLocaleString('en-IN')}\n` +
-      `Members Count: ${newChit.membersCount}\n` +
-      `Duration: ${newChit.membersCount} months (auto-calculated)\n` +
-      `Auction Gap: ${newChit.auctionGap} ${newChit.auctionGap === '1' ? 'month' : 'months'}\n` +
-      `Auction Contribution: ₹${monthlyContribution.toLocaleString('en-IN')}\n` +
-      `Model: ${newChit.paymentModel}\n` +
-      `Commission: ${newChit.commissionRate}%\n` +
-      `Grace Period: ${newChit.gracePeriodDays} days\n` +
-      `Start Date: ${new Date(newChit.startDate).toLocaleDateString('en-IN')}\n` +
-      `End Date: ${endDate}\n` +
-      `Selected Members: ${newChit.selectedMembers.length}/${newChit.membersCount}\n` +
-      `Members: ${selectedMemberNames}\n\n` +
-      `Note: This is a mock implementation. In Phase 2, this will create a real chit group in the database.`
-    );
-    setShowCreateChitModal(false);
-    setNewChit({
-      name: '',
-      chitAmount: '',
-      auctionGap: '1',
-      membersCount: '',
-      paymentModel: 'A',
-      commissionRate: '5',
-      gracePeriodDays: '3',
-      startDate: '',
-      selectedMembers: []
-    });
-    setMemberSearchQuery('');
+    try {
+      const payload = {
+        name: newChit.name.trim(),
+        chitAmount: chitAmount,
+        totalMembers: parseInt(newChit.membersCount),
+        duration: parseInt(newChit.membersCount), // Duration equals members count
+        commissionAmount: commissionAmount,
+        winnerPaymentModel: newChit.paymentModel,
+        gracePeriodDays: parseInt(newChit.gracePeriodDays) || 3,
+        monthlyContribution: monthlyContribution,
+        auctionFrequency: parseInt(newChit.auctionGap) || 1,
+        startDate: newChit.startDate,
+        members: newChit.selectedMembers
+      };
+
+      console.log('📤 Creating chit group with payload:', payload);
+
+      const response = await api.post('/chitgroups', payload);
+
+      if (response.success) {
+        alert('Chit group created successfully!');
+
+        // Refresh dashboard data
+        fetchDashboardData();
+        fetchMembersData();
+
+        setShowCreateChitModal(false);
+        setNewChit({
+          name: '',
+          chitAmount: '',
+          auctionGap: '1',
+          membersCount: '',
+          paymentModel: 'A',
+          commissionRate: '5',
+          gracePeriodDays: '3',
+          startDate: '',
+          selectedMembers: []
+        });
+        setMemberSearchQuery('');
+      } else {
+        alert('Failed to create chit group: ' + (response.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error creating chit group:', error);
+      alert('Failed to create chit group: ' + (error.message || error.data?.error || 'Unknown error'));
+    }
   };
 
   const handleAddMember = async (e) => {
@@ -1212,7 +1226,6 @@ const AdminDashboard = () => {
                 <button
                   type="submit"
                   className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-lg font-medium"
-                  disabled={newChit.selectedMembers.length === 0}
                 >
                   Create Chit Group
                 </button>
