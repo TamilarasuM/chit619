@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const ChitGroup = require('../models/ChitGroup');
+const Auction = require('../models/Auction');
+const Payment = require('../models/Payment');
 const { protect, isAdmin } = require('../middleware/auth');
 
 // @desc    Get admin dashboard data
@@ -194,9 +196,89 @@ router.get('/member', protect, async (req, res) => {
       'members.memberId': userId
     }).select('name chitAmount status completedAuctions duration members monthlyContribution');
 
-    // Format chit groups data for member
+    // Get chit group IDs for fetching related data
+    const chitGroupIds = memberChitGroups.map(chit => chit._id);
+
+    // Get last closed auction for each chit group
+    const lastAuctions = await Auction.aggregate([
+      {
+        $match: {
+          chitGroupId: { $in: chitGroupIds },
+          status: 'Closed'
+        }
+      },
+      {
+        $sort: { auctionNumber: -1 }
+      },
+      {
+        $group: {
+          _id: '$chitGroupId',
+          lastAuction: { $first: '$$ROOT' }
+        }
+      }
+    ]);
+
+    // Create a map of last auctions by chit group ID
+    const lastAuctionMap = {};
+    lastAuctions.forEach(item => {
+      lastAuctionMap[item._id.toString()] = item.lastAuction;
+    });
+
+    // Get member's payment transactions
+    const paymentTransactions = await Payment.find({
+      memberId: userId,
+      chitGroupId: { $in: chitGroupIds }
+    })
+      .populate('chitGroupId', 'name')
+      .sort({ dueDate: -1 });
+
+    // Format payment transactions
+    const formattedTransactions = paymentTransactions.map(payment => ({
+      id: payment._id,
+      dueDate: payment.dueDate,
+      chitGroupName: payment.chitGroupId?.name || 'Unknown',
+      chitGroupId: payment.chitGroupId?._id,
+      auctionNumber: payment.auctionNumber,
+      baseAmount: payment.baseAmount,
+      dividendReceived: payment.dividendReceived,
+      dueAmount: payment.dueAmount,
+      paidAmount: payment.paidAmount,
+      outstandingBalance: payment.outstandingBalance,
+      paymentStatus: payment.paymentStatus,
+      isOnTime: payment.isOnTime,
+      delayDays: payment.delayDays,
+      isWinner: payment.isWinner,
+      amountReceived: payment.amountReceived,
+      paymentMethod: payment.paymentMethod !== 'Not Paid' ? payment.paymentMethod : null
+    }));
+
+    // Get upcoming auctions for member's chit groups
+    // Include all Live and Scheduled auctions (not closed)
+    const upcomingAuctions = await Auction.find({
+      chitGroupId: { $in: chitGroupIds },
+      status: { $in: ['Live', 'Scheduled'] }
+    })
+      .sort({ status: -1, scheduledDate: -1 }) // Live first, then most recent scheduled
+      .limit(10);
+
+
+    // Format upcoming auctions
+    const formattedUpcomingAuctions = upcomingAuctions.map(auction => ({
+      id: auction._id,
+      chitGroup: auction.chitGroupName,
+      chitGroupId: auction.chitGroupId,
+      auctionNumber: auction.auctionNumber,
+      scheduledDate: auction.scheduledDate,
+      scheduledTime: auction.scheduledTime,
+      startingBid: auction.startingBid,
+      status: auction.status
+    }));
+
+    // Format chit groups data for member with last auction info
     const chitGroupsData = memberChitGroups.map(chit => {
       const memberInfo = chit.members.find(m => m.memberId.toString() === userId);
+      const lastAuction = lastAuctionMap[chit._id.toString()];
+
       return {
         _id: chit._id,
         name: chit.name,
@@ -208,7 +290,15 @@ router.get('/member', protect, async (req, res) => {
         progressPercentage: Math.round((chit.completedAuctions / chit.duration) * 100),
         hasWon: memberInfo ? memberInfo.hasWon : false,
         wonInAuction: memberInfo ? memberInfo.wonInAuction : null,
-        joinedDate: memberInfo ? memberInfo.joinedDate : null
+        joinedDate: memberInfo ? memberInfo.joinedDate : null,
+        // Last auction details
+        lastAuction: lastAuction ? {
+          auctionNumber: lastAuction.auctionNumber,
+          winnerName: lastAuction.winnerName,
+          winningBid: lastAuction.winningBid,
+          dividendPerMember: lastAuction.dividendPerMember,
+          closedAt: lastAuction.closedAt
+        } : null
       };
     });
 
@@ -219,6 +309,15 @@ router.get('/member', protect, async (req, res) => {
     const totalMonthlyDue = chitGroupsData
       .filter(c => c.status === 'Active')
       .reduce((sum, c) => sum + c.monthlyContribution, 0);
+
+    // Generate recent activity from payments
+    const recentActivity = formattedTransactions.slice(0, 5).map(txn => ({
+      message: txn.isWinner
+        ? `Won auction #${txn.auctionNumber} in ${txn.chitGroupName}`
+        : `Payment ${txn.paymentStatus.toLowerCase()} for ${txn.chitGroupName} - Auction #${txn.auctionNumber}`,
+      time: txn.dueDate,
+      amount: txn.isWinner ? txn.amountReceived : (txn.paymentStatus === 'Paid' ? txn.paidAmount : null)
+    }));
 
     res.status(200).json({
       success: true,
@@ -236,7 +335,10 @@ router.get('/member', protect, async (req, res) => {
           totalWins,
           totalMonthlyDue
         },
-        chitGroups: chitGroupsData
+        chitGroups: chitGroupsData,
+        paymentTransactions: formattedTransactions,
+        upcomingAuctions: formattedUpcomingAuctions,
+        recentActivity
       }
     });
   } catch (error) {

@@ -7,6 +7,7 @@ const MemberDashboard = () => {
   const { user, logout } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedChitGroup, setSelectedChitGroup] = useState('all');
 
   const fetchDashboardData = async () => {
     try {
@@ -109,14 +110,7 @@ const MemberDashboard = () => {
                   {dashboardData.chitGroups.map((chit) => (
                     <div
                       key={chit._id}
-                      onClick={() => alert(`${chit.name}\n\n` +
-                        `Chit Amount: ₹${chit.chitAmount.toLocaleString('en-IN')}\n` +
-                        `Auction Contribution: ₹${chit.monthlyContribution.toLocaleString('en-IN')}\n` +
-                        `Status: ${chit.status}\n` +
-                        `Progress: ${chit.completedAuctions} / ${chit.duration} auctions (${chit.progressPercentage}%)\n` +
-                        `${chit.hasWon ? `✓ Won in Auction #${chit.wonInAuction}` : 'Not won yet'}\n\n` +
-                        `Click to view detailed statement (Coming soon in Phase 5!)`)}
-                      className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-md cursor-pointer transition-all"
+                      className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:shadow-md transition-all"
                     >
                       <h3 className="font-semibold text-gray-900 mb-2">{chit.name}</h3>
                       <div className="space-y-1 text-sm">
@@ -146,6 +140,29 @@ const MemberDashboard = () => {
                             ✓ Won in Auction #{chit.wonInAuction}
                           </p>
                         )}
+
+                        {/* Last Auction Winner Info */}
+                        {chit.lastAuction && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs font-semibold text-gray-700 mb-1">Last Auction (#{chit.lastAuction.auctionNumber})</p>
+                            <div className="bg-blue-50 rounded p-2 space-y-1">
+                              <p className="text-gray-700">
+                                Winner: <span className="font-semibold text-blue-700">{chit.lastAuction.winnerName}</span>
+                              </p>
+                              <p className="text-gray-700">
+                                Winning Bid: <span className="font-semibold text-green-600">₹{chit.lastAuction.winningBid?.toLocaleString('en-IN')}</span>
+                              </p>
+                              <p className="text-gray-600 text-xs">
+                                Dividend: ₹{chit.lastAuction.dividendPerMember?.toLocaleString('en-IN')} per member
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {!chit.lastAuction && chit.completedAuctions === 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500 italic">No auctions completed yet</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -158,27 +175,55 @@ const MemberDashboard = () => {
             {/* Monthly Transactions Table */}
             <Card title="My Monthly Transactions" className="mb-8">
               {dashboardData?.paymentTransactions && dashboardData.paymentTransactions.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b-2 border-gray-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Chit Group</th>
-                        <th className="px-4 py-3 text-center font-semibold text-gray-700">Auction #</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-700">Base Amount</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-700">Dividend</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-700">Net Payable</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-700">Paid</th>
-                        <th className="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
-                        <th className="px-4 py-3 text-center font-semibold text-gray-700">Method</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {dashboardData.paymentTransactions.map((txn) => (
-                        <tr
-                          key={txn.id}
-                          className={`hover:bg-gray-50 ${txn.isWinner ? 'bg-green-50' : ''}`}
-                        >
+                <div>
+                  {/* Filter by Chit Group */}
+                  <div className="mb-4 flex items-center gap-4">
+                    <label className="text-sm font-medium text-gray-700">Filter by Chit Group:</label>
+                    <select
+                      value={selectedChitGroup}
+                      onChange={(e) => setSelectedChitGroup(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    >
+                      <option value="all">All Chit Groups</option>
+                      {dashboardData.chitGroups?.map((chit) => (
+                        <option key={chit._id} value={chit._id}>
+                          {chit.name}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedChitGroup !== 'all' && (
+                      <button
+                        onClick={() => setSelectedChitGroup('all')}
+                        className="text-sm text-primary-600 hover:text-primary-700"
+                      >
+                        Clear filter
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b-2 border-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                          <th className="px-4 py-3 text-left font-semibold text-gray-700">Chit Group</th>
+                          <th className="px-4 py-3 text-center font-semibold text-gray-700">Auction #</th>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-700">Base Amount</th>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-700">Dividend</th>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-700">Net Payable</th>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-700">Paid</th>
+                          <th className="px-4 py-3 text-center font-semibold text-gray-700">Status</th>
+                          <th className="px-4 py-3 text-center font-semibold text-gray-700">Method</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {dashboardData.paymentTransactions
+                          .filter(txn => selectedChitGroup === 'all' || txn.chitGroupId === selectedChitGroup)
+                          .map((txn) => (
+                            <tr
+                              key={txn.id}
+                              className={`hover:bg-gray-50 ${txn.isWinner ? 'bg-green-50' : ''}`}
+                            >
                           <td className="px-4 py-3 text-gray-900">
                             {new Date(txn.dueDate).toLocaleDateString('en-IN', {
                               day: '2-digit',
@@ -239,14 +284,22 @@ const MemberDashboard = () => {
                           </td>
                         </tr>
                       ))}
+                        {dashboardData.paymentTransactions.filter(txn => selectedChitGroup === 'all' || txn.chitGroupId === selectedChitGroup).length === 0 && (
+                          <tr>
+                            <td colSpan="9" className="px-4 py-6 text-center text-gray-500">
+                              No transactions found for the selected chit group
+                            </td>
+                          </tr>
+                        )}
                     </tbody>
                     <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                       <tr>
                         <td colSpan="6" className="px-4 py-3 text-right font-semibold text-gray-700">
-                          Total Paid:
+                          Total Paid{selectedChitGroup !== 'all' ? ' (filtered)' : ''}:
                         </td>
                         <td className="px-4 py-3 text-right font-bold text-green-600">
                           ₹{dashboardData.paymentTransactions
+                            .filter(t => selectedChitGroup === 'all' || t.chitGroupId === selectedChitGroup)
                             .filter(t => t.paymentStatus === 'Paid')
                             .reduce((sum, t) => sum + t.paidAmount, 0)
                             .toLocaleString('en-IN')}
@@ -255,10 +308,11 @@ const MemberDashboard = () => {
                       </tr>
                       <tr>
                         <td colSpan="6" className="px-4 py-3 text-right font-semibold text-gray-700">
-                          Total Outstanding:
+                          Total Outstanding{selectedChitGroup !== 'all' ? ' (filtered)' : ''}:
                         </td>
                         <td className="px-4 py-3 text-right font-bold text-red-600">
                           ₹{dashboardData.paymentTransactions
+                            .filter(t => selectedChitGroup === 'all' || t.chitGroupId === selectedChitGroup)
                             .reduce((sum, t) => sum + t.outstandingBalance, 0)
                             .toLocaleString('en-IN')}
                         </td>
@@ -266,6 +320,7 @@ const MemberDashboard = () => {
                       </tr>
                     </tfoot>
                   </table>
+                  </div>
                 </div>
               ) : (
                 <p className="text-gray-600">No transaction history available</p>
@@ -275,35 +330,73 @@ const MemberDashboard = () => {
             {/* Upcoming Auctions */}
             <Card title="Upcoming Auctions" className="mb-8">
               {dashboardData?.upcomingAuctions && dashboardData.upcomingAuctions.length > 0 ? (
-                <div className="space-y-3">
-                  {dashboardData.upcomingAuctions.map((auction) => (
-                    <div
-                      key={auction.id}
-                      onClick={() => alert(`Auction Details\n\n` +
-                        `Chit Group: ${auction.chitGroup}\n` +
-                        `Auction Number: #${auction.auctionNumber}\n` +
-                        `Date: ${new Date(auction.scheduledDate).toLocaleDateString('en-IN')}\n` +
-                        `Time: ${auction.scheduledTime}\n` +
-                        `Starting Bid: ₹${auction.startingBid.toLocaleString('en-IN')}\n\n` +
-                        `You will be notified when the auction starts!\n` +
-                        `(Live bidding feature coming soon!)`)}
-                      className="flex justify-between items-center p-3 bg-gray-50 rounded hover:bg-primary-50 cursor-pointer transition-colors"
+                <div>
+                  {/* Filter for upcoming auctions */}
+                  <div className="mb-4 flex items-center gap-4">
+                    <label className="text-sm font-medium text-gray-700">Filter:</label>
+                    <select
+                      value={selectedChitGroup}
+                      onChange={(e) => setSelectedChitGroup(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     >
-                      <div>
-                        <p className="font-medium text-gray-900">{auction.chitGroup}</p>
-                        <p className="text-sm text-gray-600">Auction #{auction.auctionNumber}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">
-                          {new Date(auction.scheduledDate).toLocaleDateString('en-IN')}
-                        </p>
-                        <p className="text-xs text-gray-500">{auction.scheduledTime}</p>
-                      </div>
-                    </div>
-                  ))}
+                      <option value="all">All Chit Groups</option>
+                      {dashboardData.chitGroups?.map((chit) => (
+                        <option key={chit._id} value={chit._id}>
+                          {chit.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    {dashboardData.upcomingAuctions
+                      .filter(auction => selectedChitGroup === 'all' || auction.chitGroupId === selectedChitGroup)
+                      .map((auction) => (
+                        <div
+                          key={auction.id}
+                          className={`flex justify-between items-center p-3 rounded transition-colors ${
+                            auction.status === 'Live'
+                              ? 'bg-green-50 border border-green-200 hover:bg-green-100'
+                              : 'bg-gray-50 hover:bg-primary-50'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900">{auction.chitGroup}</p>
+                              {auction.status === 'Live' && (
+                                <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold bg-green-500 text-white rounded-full animate-pulse">
+                                  LIVE
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600">Auction #{auction.auctionNumber}</p>
+                            <p className="text-xs text-gray-500">
+                              Starting Bid: ₹{auction.startingBid?.toLocaleString('en-IN')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-gray-900">
+                              {new Date(auction.scheduledDate).toLocaleDateString('en-IN')}
+                            </p>
+                            <p className="text-xs text-gray-500">{auction.scheduledTime}</p>
+                            {auction.status === 'Scheduled' && (
+                              <span className="inline-flex px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded mt-1">
+                                Scheduled
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    {dashboardData.upcomingAuctions.filter(auction => selectedChitGroup === 'all' || auction.chitGroupId === selectedChitGroup).length === 0 && (
+                      <p className="text-gray-500 text-sm">No upcoming auctions for this chit group</p>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <p className="text-gray-600">No upcoming auctions</p>
+                <div className="text-center py-4">
+                  <p className="text-gray-600">No upcoming auctions scheduled</p>
+                  <p className="text-sm text-gray-500 mt-1">All auctions for your chit groups have been completed or none are scheduled yet.</p>
+                </div>
               )}
             </Card>
 

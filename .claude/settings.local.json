@@ -55,7 +55,10 @@
       "Bash(done)",
       "Bash(for file in backend/models/*.js)",
       "Bash(grep:*)",
-      "Bash(npm run create-admin:*)"
+      "Bash(npm run create-admin:*)",
+      "Bash(gh --version:*)",
+      "Bash(echo:*)",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []
