@@ -58,7 +58,8 @@
       "Bash(npm run create-admin:*)",
       "Bash(gh --version:*)",
       "Bash(echo:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(npm run server:*)"
     ],
     "deny": [],
     "ask": []

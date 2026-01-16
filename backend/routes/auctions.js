@@ -6,12 +6,13 @@ const Payment = require('../models/Payment');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const AuditLog = require('../models/AuditLog');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, requireTenant, validateUserTenant } = require('../middleware/auth');
+const { resolveTenant, getTenantFilter, addTenantToDocument } = require('../middleware/tenantResolver');
 
 // @desc    Schedule new auction (simplified endpoint)
 // @route   POST /api/auctions
 // @access  Private/Admin
-router.post('/', protect, authorize('admin'), async (req, res) => {
+router.post('/', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const {
       chitGroupId,
@@ -34,8 +35,9 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       });
     }
 
-    // Verify chit group exists and is active
-    const chitGroup = await ChitGroup.findById(chitGroupId)
+    // Verify chit group exists, is active, and belongs to tenant
+    const tenantFilter = getTenantFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: chitGroupId, ...tenantFilter })
       .populate('members.memberId', 'name phone email');
 
     if (!chitGroup) {
@@ -99,8 +101,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
     console.log('Extracted Time:', timeString);
     console.log('Hours:', hours, 'Minutes:', minutes);
 
-    // Create auction
-    const auction = await Auction.create({
+    // Create auction with tenantId
+    const auction = await Auction.create(addTenantToDocument(req, {
       chitGroupId,
       chitGroupName: chitGroup.name,
       auctionNumber,
@@ -116,12 +118,12 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       venue: venue || '',
       createdBy: req.user.id,
       notes: notes || ''
-    });
+    }));
 
     console.log('✅ Auction created:', auction.auctionNumber);
 
-    // Send notifications to eligible members
-    const notifications = eligibleMembers.map(member => ({
+    // Send notifications to eligible members (with tenantId)
+    const notifications = eligibleMembers.map(member => addTenantToDocument(req, {
       recipientId: member.memberId._id,
       recipientPhone: member.memberId.phone,
       recipientName: member.memberId.name,
@@ -135,8 +137,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       await Notification.insertMany(notifications);
     }
 
-    // Create audit log
-    await AuditLog.create({
+    // Create audit log with tenantId
+    await AuditLog.create(addTenantToDocument(req, {
       userId: req.user.id,
       userName: req.user.name,
       userRole: req.user.role,
@@ -151,7 +153,7 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       },
       ipAddress: req.ip,
       userAgent: req.get('user-agent')
-    });
+    }));
 
     res.status(201).json({
       success: true,
@@ -169,7 +171,7 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
 // @desc    Schedule new auction (legacy endpoint)
 // @route   POST /api/auctions/schedule
 // @access  Private/Admin
-router.post('/schedule', protect, authorize('admin'), async (req, res) => {
+router.post('/schedule', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const {
       chitGroupId,
@@ -324,7 +326,7 @@ router.post('/schedule', protect, authorize('admin'), async (req, res) => {
 // @desc    Start auction
 // @route   POST /api/auctions/:id/start
 // @access  Private/Admin
-router.post('/:id/start', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/start', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const auction = await Auction.findById(req.params.id)
       .populate('chitGroupId');
@@ -424,7 +426,7 @@ router.post('/:id/start', protect, authorize('admin'), async (req, res) => {
 // @desc    Place bid in auction (member bids for self, admin can bid on behalf of any member)
 // @route   POST /api/auctions/:id/bid
 // @access  Private
-router.post('/:id/bid', protect, async (req, res) => {
+router.post('/:id/bid', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
     const { bidAmount, memberId } = req.body;
 
@@ -696,7 +698,7 @@ router.post('/:id/bid', protect, async (req, res) => {
 // @desc    Close auction and select winner (manual selection by admin)
 // @route   POST /api/auctions/:id/close
 // @access  Private/Admin
-router.post('/:id/close', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/close', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const { winnerId, manualDividendPerMember } = req.body;
 
@@ -1021,11 +1023,13 @@ router.post('/:id/close', protect, authorize('admin'), async (req, res) => {
 // @desc    Get all auctions
 // @route   GET /api/auctions
 // @access  Private
-router.get('/', protect, async (req, res) => {
+router.get('/', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
-    // Admin can see all auctions
-    if (req.user.role === 'admin') {
-      const auctions = await Auction.find()
+    const tenantFilter = getTenantFilter(req);
+
+    // Admin can see all auctions for their tenant
+    if (req.user.role === 'admin' || req.user.tenantRole === 'admin') {
+      const auctions = await Auction.find(tenantFilter)
         .populate('chitGroupId', 'name chitAmount commissionAmount')
         .populate('winnerId', 'name phone')
         .populate('createdBy', 'name')
@@ -1040,15 +1044,17 @@ router.get('/', protect, async (req, res) => {
     }
 
     // Members can only see auctions for their chit groups
-    if (req.user.role === 'member') {
-      // Find all chit groups the member belongs to
+    if (req.user.role === 'member' || req.user.tenantRole === 'member') {
+      // Find all chit groups the member belongs to (within tenant)
       const chitGroups = await ChitGroup.find({
+        ...tenantFilter,
         'members.memberId': req.user.id
       }).select('_id');
 
       const chitGroupIds = chitGroups.map(cg => cg._id);
 
       const auctions = await Auction.find({
+        ...tenantFilter,
         chitGroupId: { $in: chitGroupIds }
       })
         .populate('chitGroupId', 'name chitAmount commissionAmount')
@@ -1078,9 +1084,10 @@ router.get('/', protect, async (req, res) => {
 // @desc    Get auction details
 // @route   GET /api/auctions/:id
 // @access  Private
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
-    const auction = await Auction.findById(req.params.id)
+    const tenantFilter = getTenantFilter(req);
+    const auction = await Auction.findOne({ _id: req.params.id, ...tenantFilter })
       .populate({
         path: 'chitGroupId',
         populate: {
@@ -1152,9 +1159,10 @@ router.get('/:id', protect, async (req, res) => {
 // @desc    Get all auctions for a chit group
 // @route   GET /api/auctions/chitgroup/:chitGroupId
 // @access  Private
-router.get('/chitgroup/:chitGroupId', protect, async (req, res) => {
+router.get('/chitgroup/:chitGroupId', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.chitGroupId);
+    const tenantFilter = getTenantFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.chitGroupId, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -1198,7 +1206,7 @@ router.get('/chitgroup/:chitGroupId', protect, async (req, res) => {
 // @desc    Exclude member from auction manually
 // @route   POST /api/auctions/:id/exclude-member
 // @access  Private/Admin
-router.post('/:id/exclude-member', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/exclude-member', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const { memberId, reason } = req.body;
 
@@ -1302,7 +1310,7 @@ router.post('/:id/exclude-member', protect, authorize('admin'), async (req, res)
 // @desc    Revert member exclusion (make member eligible again)
 // @route   DELETE /api/auctions/:id/exclude-member/:memberId
 // @access  Private/Admin
-router.delete('/:id/exclude-member/:memberId', protect, authorize('admin'), async (req, res) => {
+router.delete('/:id/exclude-member/:memberId', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const { id: auctionId, memberId } = req.params;
 
@@ -1397,7 +1405,7 @@ router.delete('/:id/exclude-member/:memberId', protect, authorize('admin'), asyn
 // @desc    Get upcoming auctions
 // @route   GET /api/auctions/upcoming
 // @access  Private/Member
-router.get('/member/upcoming', protect, async (req, res) => {
+router.get('/member/upcoming', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).populate('chitGroups');
 
@@ -1427,9 +1435,10 @@ router.get('/member/upcoming', protect, async (req, res) => {
 // @desc    Delete auction with cascading deletes
 // @route   DELETE /api/auctions/:id
 // @access  Private/Admin
-router.delete('/:id', protect, authorize('admin'), async (req, res) => {
+router.delete('/:id', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
-    const auction = await Auction.findById(req.params.id).populate('chitGroupId');
+    const tenantFilter = getTenantFilter(req);
+    const auction = await Auction.findOne({ _id: req.params.id, ...tenantFilter }).populate('chitGroupId');
 
     if (!auction) {
       return res.status(404).json({

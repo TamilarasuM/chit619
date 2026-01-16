@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { TenantProvider } from './context/TenantContext';
+import TenantThemeProvider from './components/ThemeProvider';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
 // Pages
@@ -33,174 +35,225 @@ import ReportsPage from './pages/admin/ReportsPage';
 // Member Rankings
 import MemberRankingsPage from './pages/admin/MemberRankingsPage';
 
+// Super Admin Pages
+import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
+import TenantsListPage from './pages/superadmin/TenantsListPage';
+import CreateTenantPage from './pages/superadmin/CreateTenantPage';
+import TenantDetailsPage from './pages/superadmin/TenantDetailsPage';
+
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
+        <TenantProvider>
+          <TenantThemeProvider>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/login" element={<Login />} />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin/dashboard"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
+              {/* Super Admin Routes */}
+              <Route
+                path="/superadmin/dashboard"
+                element={
+                  <ProtectedRoute requiredRole="superadmin">
+                    <SuperAdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/superadmin/tenants"
+                element={
+                  <ProtectedRoute requiredRole="superadmin">
+                    <TenantsListPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/superadmin/tenants/create"
+                element={
+                  <ProtectedRoute requiredRole="superadmin">
+                    <CreateTenantPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/superadmin/tenants/:id"
+                element={
+                  <ProtectedRoute requiredRole="superadmin">
+                    <TenantDetailsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/superadmin/tenants/:id/edit"
+                element={
+                  <ProtectedRoute requiredRole="superadmin">
+                    <CreateTenantPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Chit Group Routes */}
-          <Route
-            path="/chitgroups"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <ChitGroupsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/chitgroups/create"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <CreateChitGroupPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/chitgroups/:id"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <ChitGroupDetailsPage />
-              </ProtectedRoute>
-            }
-          />
+              {/* Admin Routes */}
+              <Route
+                path="/admin/dashboard"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Auction Routes (Admin) */}
-          <Route
-            path="/auctions"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AuctionsListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/auctions/schedule/:chitGroupId"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <ScheduleAuctionPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/auctions/:auctionId/control"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AuctionControlPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/auctions/:auctionId/payments"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <AuctionPaymentTrackingPage />
-              </ProtectedRoute>
-            }
-          />
+              {/* Chit Group Routes */}
+              <Route
+                path="/chitgroups"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ChitGroupsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/chitgroups/create"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <CreateChitGroupPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/chitgroups/:id"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ChitGroupDetailsPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Payment Routes (Admin) */}
-          <Route
-            path="/payments"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <PaymentHistoryPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/payments/pending"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <PendingPaymentsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/payments/record"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <RecordPaymentPage />
-              </ProtectedRoute>
-            }
-          />
+              {/* Auction Routes (Admin) */}
+              <Route
+                path="/auctions"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AuctionsListPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/auctions/schedule/:chitGroupId"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ScheduleAuctionPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/auctions/:auctionId/control"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AuctionControlPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/auctions/:auctionId/payments"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AuctionPaymentTrackingPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Reports Route (Admin) */}
-          <Route
-            path="/reports"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <ReportsPage />
-              </ProtectedRoute>
-            }
-          />
+              {/* Payment Routes (Admin) */}
+              <Route
+                path="/payments"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <PaymentHistoryPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/payments/pending"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <PendingPaymentsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/payments/record"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <RecordPaymentPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Member Rankings Route (Admin) */}
-          <Route
-            path="/rankings"
-            element={
-              <ProtectedRoute requiredRole="admin">
-                <MemberRankingsPage />
-              </ProtectedRoute>
-            }
-          />
+              {/* Reports Route (Admin) */}
+              <Route
+                path="/reports"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ReportsPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Member Routes */}
-          <Route
-            path="/member/dashboard"
-            element={
-              <ProtectedRoute requiredRole="member">
-                <MemberDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/member/auctions"
-            element={
-              <ProtectedRoute requiredRole="member">
-                <MemberAuctionsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/member/payments"
-            element={
-              <ProtectedRoute requiredRole="member">
-                <MemberPaymentsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/member/statement/:chitGroupId"
-            element={
-              <ProtectedRoute requiredRole="member">
-                <MemberStatementPage />
-              </ProtectedRoute>
-            }
-          />
+              {/* Member Rankings Route (Admin) */}
+              <Route
+                path="/rankings"
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <MemberRankingsPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Default Redirect */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+              {/* Member Routes */}
+              <Route
+                path="/member/dashboard"
+                element={
+                  <ProtectedRoute requiredRole="member">
+                    <MemberDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/member/auctions"
+                element={
+                  <ProtectedRoute requiredRole="member">
+                    <MemberAuctionsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/member/payments"
+                element={
+                  <ProtectedRoute requiredRole="member">
+                    <MemberPaymentsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/member/statement/:chitGroupId"
+                element={
+                  <ProtectedRoute requiredRole="member">
+                    <MemberStatementPage />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* 404 - Redirect to login */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+              {/* Default Redirect */}
+              <Route path="/" element={<Navigate to="/login" replace />} />
+
+              {/* 404 - Redirect to login */}
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </TenantThemeProvider>
+        </TenantProvider>
       </AuthProvider>
     </BrowserRouter>
   );
 }
 
 export default App;
-

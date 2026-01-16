@@ -134,6 +134,12 @@ const SummarySchema = new mongoose.Schema({
 }, { _id: false });
 
 const MemberStatementSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    required: [true, 'Tenant is required'],
+    index: true
+  },
   memberId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

@@ -1,10 +1,15 @@
 const mongoose = require('mongoose');
 
 const SettingsSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    default: null, // null for global settings
+    index: true
+  },
   key: {
     type: String,
     required: [true, 'Setting key is required'],
-    unique: true,
     trim: true,
     uppercase: true
   },
@@ -53,8 +58,8 @@ const SettingsSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create indexes
-SettingsSchema.index({ key: 1 }, { unique: true });
+// Create indexes - compound unique for tenantId + key
+SettingsSchema.index({ tenantId: 1, key: 1 }, { unique: true });
 SettingsSchema.index({ category: 1 });
 
 // Method to update setting value

@@ -57,6 +57,12 @@ const ManualExclusionSchema = new mongoose.Schema({
 }, { _id: false });
 
 const AuctionSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    required: [true, 'Tenant is required'],
+    index: true
+  },
   chitGroupId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ChitGroup',

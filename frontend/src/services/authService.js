@@ -1,16 +1,30 @@
 import api from './api';
 
 const authService = {
-  // Login
-  login: async (phone, password) => {
+  // Login with optional tenantId for multi-tenant support
+  login: async (phone, password, tenantId = null) => {
     try {
+      // If tenantId provided, temporarily set it for the login request
+      if (tenantId) {
+        localStorage.setItem('tenantId', tenantId);
+      }
+
       const response = await api.post('/auth/login', { phone, password });
       if (response.success && response.token) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
+
+        // Store tenantId from response if available
+        if (response.user.tenantId) {
+          localStorage.setItem('tenantId', response.user.tenantId);
+        }
       }
       return response;
     } catch (error) {
+      // Clear tenantId on failed login if it was set
+      if (tenantId) {
+        localStorage.removeItem('tenantId');
+      }
       throw error;
     }
   },
@@ -25,6 +39,7 @@ const authService = {
     } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('tenantId');
     }
   },
 
@@ -32,8 +47,8 @@ const authService = {
   getCurrentUser: async () => {
     try {
       const response = await api.get('/auth/me');
-      if (response.success && response.user) {
-        localStorage.setItem('user', JSON.stringify(response.user));
+      if (response.success && response.data) {
+        localStorage.setItem('user', JSON.stringify(response.data));
       }
       return response;
     } catch (error) {
@@ -44,8 +59,8 @@ const authService = {
   // Change password
   changePassword: async (oldPassword, newPassword) => {
     try {
-      const response = await api.put('/auth/change-password', {
-        oldPassword,
+      const response = await api.put('/auth/updatepassword', {
+        currentPassword: oldPassword,
         newPassword,
       });
       return response;
@@ -65,9 +80,26 @@ const authService = {
     return localStorage.getItem('token');
   },
 
+  // Get stored tenant ID
+  getStoredTenantId: () => {
+    return localStorage.getItem('tenantId');
+  },
+
   // Check if user is authenticated
   isAuthenticated: () => {
     return !!localStorage.getItem('token');
+  },
+
+  // Check if user is super admin
+  isSuperAdmin: () => {
+    const user = authService.getStoredUser();
+    return user?.platformRole === 'superadmin';
+  },
+
+  // Check if user is tenant admin
+  isTenantAdmin: () => {
+    const user = authService.getStoredUser();
+    return user?.platformRole === 'tenant_user' && (user?.tenantRole === 'admin' || user?.role === 'admin');
   },
 };
 

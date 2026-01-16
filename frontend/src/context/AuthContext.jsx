@@ -41,12 +41,18 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const login = async (phone, password) => {
+  const login = async (phone, password, tenantId = null) => {
     try {
       setError(null);
       setLoading(true);
-      const response = await authService.login(phone, password);
+      const response = await authService.login(phone, password, tenantId);
       setUser(response.user);
+
+      // Store tenantId if user is a tenant user
+      if (response.user.tenantId) {
+        localStorage.setItem('tenantId', response.user.tenantId);
+      }
+
       return response;
     } catch (error) {
       setError(error.message);
@@ -61,6 +67,8 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await authService.logout();
       setUser(null);
+      // Clear tenant context on logout
+      localStorage.removeItem('tenantId');
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -73,6 +81,13 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(userData));
   };
 
+  // Check role - use tenantRole for tenant users, platformRole for super admin
+  const getUserRole = () => {
+    if (!user) return null;
+    if (user.platformRole === 'superadmin') return 'superadmin';
+    return user.tenantRole || user.role;
+  };
+
   const value = {
     user,
     loading,
@@ -81,8 +96,18 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUser,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
-    isMember: user?.role === 'member',
+    // Multi-tenant role checks
+    isSuperAdmin: user?.platformRole === 'superadmin',
+    isTenantAdmin: user?.platformRole === 'tenant_user' && (user?.tenantRole === 'admin' || user?.role === 'admin'),
+    isTenantMember: user?.platformRole === 'tenant_user' && (user?.tenantRole === 'member' || user?.role === 'member'),
+    // Legacy role checks for backward compatibility
+    isAdmin: user?.role === 'admin' || user?.tenantRole === 'admin' || user?.platformRole === 'superadmin',
+    isMember: user?.role === 'member' || user?.tenantRole === 'member',
+    // Tenant info
+    tenantId: user?.tenantId,
+    platformRole: user?.platformRole,
+    tenantRole: user?.tenantRole,
+    getUserRole,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

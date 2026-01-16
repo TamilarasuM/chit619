@@ -1,14 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { protect, isAdmin } = require('../middleware/auth');
+const { protect, isAdmin, isTenantAdmin, requireTenant } = require('../middleware/auth');
+const { resolveTenant } = require('../middleware/tenantResolver');
+
+// Helper to get tenant filter for queries
+const getFilter = (req) => {
+  if (req.user.platformRole === 'superadmin' && !req.tenantId) {
+    return {};
+  }
+  const tenantId = req.tenantId || req.user.tenantId;
+  return tenantId ? { tenantId } : {};
+};
 
 // @desc    Create a new member
 // @route   POST /api/members
 // @access  Private/Admin
-router.post('/', protect, isAdmin, async (req, res) => {
+router.post('/', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
     const { name, phone, email, password, language } = req.body;
+    const tenantId = req.tenantId || req.user.tenantId;
 
     // Validate required fields
     if (!name || !phone || !password) {
@@ -18,22 +29,25 @@ router.post('/', protect, isAdmin, async (req, res) => {
       });
     }
 
-    // Check if phone already exists
-    const existingUser = await User.findOne({ phone });
+    // Check if phone already exists within this tenant
+    const existingUser = await User.findOne({ phone, tenantId });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        error: 'Phone number already registered'
+        error: 'Phone number already registered in this organization'
       });
     }
 
-    // Create member
+    // Create member with tenant
     const member = await User.create({
+      tenantId,
+      platformRole: 'tenant_user',
+      tenantRole: 'member',
+      role: 'member', // backward compatibility
       name,
       phone,
       email: email || '',
       password,
-      role: 'member',
       language: language || 'en',
       status: 'active',
       createdBy: req.user.id
@@ -47,6 +61,7 @@ router.post('/', protect, isAdmin, async (req, res) => {
         phone: member.phone,
         email: member.email,
         role: member.role,
+        tenantRole: member.tenantRole,
         language: member.language,
         status: member.status,
         createdAt: member.createdAt
@@ -80,9 +95,10 @@ router.post('/', protect, isAdmin, async (req, res) => {
 // @desc    Get all members
 // @route   GET /api/members
 // @access  Private/Admin
-router.get('/', protect, isAdmin, async (req, res) => {
+router.get('/', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const members = await User.find({ role: 'member' })
+    const tenantFilter = getFilter(req);
+    const members = await User.find({ ...tenantFilter, platformRole: 'tenant_user', tenantRole: 'member' })
       .populate('chitGroups', 'name status')
       .sort({ createdAt: -1 });
 
@@ -114,9 +130,10 @@ router.get('/', protect, isAdmin, async (req, res) => {
 // @desc    Get single member
 // @route   GET /api/members/:id
 // @access  Private/Admin
-router.get('/:id', protect, isAdmin, async (req, res) => {
+router.get('/:id', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const member = await User.findById(req.params.id)
+    const tenantFilter = getFilter(req);
+    const member = await User.findOne({ _id: req.params.id, ...tenantFilter })
       .populate('chitGroups', 'name status chitAmount');
 
     if (!member) {
@@ -142,11 +159,12 @@ router.get('/:id', protect, isAdmin, async (req, res) => {
 // @desc    Update member
 // @route   PUT /api/members/:id
 // @access  Private/Admin
-router.put('/:id', protect, isAdmin, async (req, res) => {
+router.put('/:id', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
     const { name, phone, email, language, status, password } = req.body;
+    const tenantFilter = getFilter(req);
 
-    const member = await User.findById(req.params.id);
+    const member = await User.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!member) {
       return res.status(404).json({
@@ -197,9 +215,10 @@ router.put('/:id', protect, isAdmin, async (req, res) => {
 // @desc    Delete member
 // @route   DELETE /api/members/:id
 // @access  Private/Admin
-router.delete('/:id', protect, isAdmin, async (req, res) => {
+router.delete('/:id', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const member = await User.findById(req.params.id);
+    const tenantFilter = getFilter(req);
+    const member = await User.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!member) {
       return res.status(404).json({
@@ -234,9 +253,10 @@ router.delete('/:id', protect, isAdmin, async (req, res) => {
 // @desc    Suspend/Activate member
 // @route   PUT /api/members/:id/status
 // @access  Private/Admin
-router.put('/:id/status', protect, isAdmin, async (req, res) => {
+router.put('/:id/status', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
     const { status, suspensionReason } = req.body;
+    const tenantFilter = getFilter(req);
 
     if (!['active', 'suspended', 'inactive'].includes(status)) {
       return res.status(400).json({
@@ -245,7 +265,7 @@ router.put('/:id/status', protect, isAdmin, async (req, res) => {
       });
     }
 
-    const member = await User.findById(req.params.id);
+    const member = await User.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!member) {
       return res.status(404).json({

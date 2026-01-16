@@ -108,7 +108,11 @@ app.get('/api', (req, res) => {
 });
 
 // Mount routers
-// Real database routes
+// Multi-tenant routes (super admin & tenant config)
+app.use('/api/superadmin', require('./routes/superadmin'));
+app.use('/api/tenant', require('./routes/tenant'));
+
+// Tenant-scoped routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/members', require('./routes/members'));

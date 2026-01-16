@@ -2,16 +2,27 @@ const express = require('express');
 const router = express.Router();
 const ChitGroup = require('../models/ChitGroup');
 const User = require('../models/User');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, isTenantAdmin, requireTenant, authorizeRoles } = require('../middleware/auth');
+const { resolveTenant } = require('../middleware/tenantResolver');
 const AuditLog = require('../models/AuditLog');
+
+// Helper to get tenant filter for queries
+const getFilter = (req) => {
+  if (req.user.platformRole === 'superadmin' && !req.tenantId) {
+    return {};
+  }
+  const tenantId = req.tenantId || req.user.tenantId;
+  return tenantId ? { tenantId } : {};
+};
 
 // @desc    Create new chit group
 // @route   POST /api/chitgroups
 // @access  Private/Admin
-router.post('/', protect, authorize('admin'), async (req, res) => {
+router.post('/', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
     console.log('📥 CREATE CHIT GROUP REQUEST RECEIVED');
-    console.log('User:', req.user?.name, 'Role:', req.user?.role);
+    console.log('User:', req.user?.name, 'Role:', req.user?.role || req.user?.tenantRole);
+    console.log('Tenant:', req.tenantId);
     console.log('Body:', JSON.stringify(req.body, null, 2));
 
     const {
@@ -55,10 +66,12 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
         });
       }
 
-      // Verify all members exist and are active
+      // Verify all members exist and are active (within same tenant)
+      const tenantId = req.tenantId || req.user.tenantId;
       const membersData = await User.find({
         _id: { $in: members },
-        role: 'member',
+        tenantId: tenantId,
+        tenantRole: 'member',
         status: 'active'
       });
 
@@ -78,8 +91,10 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
       }));
     }
 
-    // Create chit group
+    // Create chit group with tenant
+    const tenantId = req.tenantId || req.user.tenantId;
     const chitGroup = await ChitGroup.create({
+      tenantId,
       name,
       chitAmount,
       totalMembers,
@@ -105,8 +120,9 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
 
     // Log audit
     await AuditLog.create({
+      tenantId,
       userId: req.user.id,
-      userRole: req.user.role,
+      userRole: req.user.tenantRole || req.user.role,
       userName: req.user.name,
       action: 'CREATE_CHIT_GROUP',
       entity: 'ChitGroup',
@@ -142,11 +158,12 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
 // @desc    Get all chit groups
 // @route   GET /api/chitgroups
 // @access  Private/Admin
-router.get('/', protect, authorize('admin'), async (req, res) => {
+router.get('/', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
     const { status, page = 1, limit = 10, search } = req.query;
+    const tenantFilter = getFilter(req);
 
-    const query = {};
+    const query = { ...tenantFilter };
 
     // Filter by status if provided
     if (status) {
@@ -189,9 +206,10 @@ router.get('/', protect, authorize('admin'), async (req, res) => {
 // @desc    Get single chit group
 // @route   GET /api/chitgroups/:id
 // @access  Private
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, resolveTenant, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.id)
+    const tenantFilter = getFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter })
       .populate('createdBy', 'name phone email')
       .populate('members.memberId', 'name phone email status')
       .populate('closedBy', 'name phone');
@@ -248,9 +266,10 @@ router.get('/:id', protect, async (req, res) => {
 // @desc    Update chit group
 // @route   PUT /api/chitgroups/:id
 // @access  Private/Admin
-router.put('/:id', protect, authorize('admin'), async (req, res) => {
+router.put('/:id', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    let chitGroup = await ChitGroup.findById(req.params.id);
+    const tenantFilter = getFilter(req);
+    let chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -330,9 +349,10 @@ router.put('/:id', protect, authorize('admin'), async (req, res) => {
 // @desc    Close chit group
 // @route   POST /api/chitgroups/:id/close
 // @access  Private/Admin
-router.post('/:id/close', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/close', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.id);
+    const tenantFilter = getFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -401,9 +421,10 @@ router.post('/:id/close', protect, authorize('admin'), async (req, res) => {
 // @desc    Add member to chit group
 // @route   POST /api/chitgroups/:id/add-member
 // @access  Private/Admin
-router.post('/:id/add-member', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/add-member', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
     const { memberId } = req.body;
+    const tenantFilter = getFilter(req);
 
     if (!memberId) {
       return res.status(400).json({
@@ -412,7 +433,7 @@ router.post('/:id/add-member', protect, authorize('admin'), async (req, res) => 
       });
     }
 
-    const chitGroup = await ChitGroup.findById(req.params.id);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -449,10 +470,12 @@ router.post('/:id/add-member', protect, authorize('admin'), async (req, res) => 
       });
     }
 
-    // Verify member exists and is active
+    // Verify member exists and is active (within same tenant)
+    const tenantId = req.tenantId || req.user.tenantId;
     const member = await User.findOne({
       _id: memberId,
-      role: 'member',
+      tenantId: tenantId,
+      tenantRole: 'member',
       status: 'active'
     });
 
@@ -482,8 +505,9 @@ router.post('/:id/add-member', protect, authorize('admin'), async (req, res) => 
 
     // Log audit
     await AuditLog.create({
+      tenantId,
       userId: req.user.id,
-      userRole: req.user.role,
+      userRole: req.user.tenantRole || req.user.role,
       userName: req.user.name,
       action: 'ADD_MEMBER_TO_CHIT',
       entity: 'ChitGroup',
@@ -517,9 +541,10 @@ router.post('/:id/add-member', protect, authorize('admin'), async (req, res) => 
 // @desc    Remove member from chit group
 // @route   DELETE /api/chitgroups/:id/remove-member/:memberId
 // @access  Private/Admin
-router.delete('/:id/remove-member/:memberId', protect, authorize('admin'), async (req, res) => {
+router.delete('/:id/remove-member/:memberId', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.id);
+    const tenantFilter = getFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -597,9 +622,10 @@ router.delete('/:id/remove-member/:memberId', protect, authorize('admin'), async
 // @desc    Activate chit group (change from InProgress to Active)
 // @route   POST /api/chitgroups/:id/activate
 // @access  Private/Admin
-router.post('/:id/activate', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/activate', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.id);
+    const tenantFilter = getFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -661,9 +687,10 @@ router.post('/:id/activate', protect, authorize('admin'), async (req, res) => {
 // @desc    Delete chit group
 // @route   DELETE /api/chitgroups/:id
 // @access  Private/Admin
-router.delete('/:id', protect, authorize('admin'), async (req, res) => {
+router.delete('/:id', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.id);
+    const tenantFilter = getFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.id, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({

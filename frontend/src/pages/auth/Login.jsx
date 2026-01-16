@@ -45,7 +45,9 @@ const Login = () => {
       const response = await login(phone.trim(), password);
 
       // Redirect based on user role
-      if (response.user.role === 'admin') {
+      if (response.user.platformRole === 'superadmin' || response.user.isSuperAdmin) {
+        navigate('/superadmin/dashboard');
+      } else if (response.user.tenantRole === 'admin' || response.user.role === 'admin') {
         navigate('/admin/dashboard');
       } else {
         navigate('/member/dashboard');

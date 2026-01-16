@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const AuditLogSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    default: null, // null for super admin actions
+    index: true
+  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -8,7 +14,7 @@ const AuditLogSchema = new mongoose.Schema({
   },
   userRole: {
     type: String,
-    enum: ['admin', 'member'],
+    enum: ['superadmin', 'admin', 'member'],
     required: true
   },
   userName: {
@@ -24,6 +30,7 @@ const AuditLogSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Entity is required'],
     enum: [
+      'Tenant',
       'User',
       'ChitGroup',
       'Auction',

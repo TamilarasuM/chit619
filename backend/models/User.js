@@ -3,6 +3,29 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const UserSchema = new mongoose.Schema({
+  // Multi-tenant fields
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    default: null, // null for super admin
+    index: true
+  },
+  platformRole: {
+    type: String,
+    enum: ['superadmin', 'tenant_user'],
+    default: 'tenant_user'
+  },
+  tenantRole: {
+    type: String,
+    enum: ['admin', 'member', null],
+    default: 'member'
+  },
+  // Keep 'role' for backward compatibility during migration
+  role: {
+    type: String,
+    enum: ['admin', 'member'],
+    default: 'member'
+  },
   name: {
     type: String,
     required: [true, 'Please add a name'],
@@ -12,7 +35,6 @@ const UserSchema = new mongoose.Schema({
   phone: {
     type: String,
     required: [true, 'Please add a phone number'],
-    unique: true,
     trim: true,
     match: [
       /^[0-9]{10}$/,
@@ -33,11 +55,6 @@ const UserSchema = new mongoose.Schema({
     required: [true, 'Please add a password'],
     minlength: [6, 'Password must be at least 6 characters'],
     select: false
-  },
-  role: {
-    type: String,
-    enum: ['admin', 'member'],
-    default: 'member'
   },
   language: {
     type: String,
@@ -98,16 +115,43 @@ UserSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
+// Compound index for phone uniqueness within tenant
+// Phone must be unique within a tenant, but same phone can exist in different tenants
+UserSchema.index({ tenantId: 1, phone: 1 }, {
+  unique: true,
+  partialFilterExpression: { tenantId: { $ne: null } }
+});
+
 // Sign JWT and return
 UserSchema.methods.getSignedJwtToken = function() {
   return jwt.sign(
-    { id: this._id, role: this.role },
+    {
+      id: this._id,
+      role: this.role,
+      tenantRole: this.tenantRole,
+      tenantId: this.tenantId,
+      platformRole: this.platformRole
+    },
     process.env.JWT_SECRET,
     {
       expiresIn: process.env.JWT_EXPIRE
     }
   );
 };
+
+// Virtual for checking if user is super admin
+UserSchema.virtual('isSuperAdmin').get(function() {
+  return this.platformRole === 'superadmin';
+});
+
+// Virtual for checking if user is tenant admin
+UserSchema.virtual('isTenantAdmin').get(function() {
+  return this.platformRole === 'tenant_user' && this.tenantRole === 'admin';
+});
+
+// Ensure virtuals are included in JSON
+UserSchema.set('toJSON', { virtuals: true });
+UserSchema.set('toObject', { virtuals: true });
 
 // Match user entered password to hashed password in database
 UserSchema.methods.matchPassword = async function(enteredPassword) {

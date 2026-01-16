@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const MemberRankingSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    required: [true, 'Tenant is required'],
+    index: true
+  },
   memberId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

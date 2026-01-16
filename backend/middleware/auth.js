@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Tenant = require('../models/Tenant');
 
 // Protect routes - Verify JWT token
 exports.protect = async (req, res, next) => {
@@ -203,4 +204,132 @@ exports.optionalAuth = async (req, res, next) => {
   }
 
   next();
+};
+
+// Check if user is super admin (platform level)
+exports.isSuperAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized. Please login.'
+    });
+  }
+
+  if (req.user.platformRole !== 'superadmin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Super Admin access required'
+    });
+  }
+
+  next();
+};
+
+// Check if user is tenant admin (organization level)
+exports.isTenantAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Not authorized. Please login.'
+    });
+  }
+
+  // Super admin can access tenant admin routes
+  if (req.user.platformRole === 'superadmin') {
+    return next();
+  }
+
+  if (req.user.platformRole !== 'tenant_user' || req.user.tenantRole !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Tenant Admin access required'
+    });
+  }
+
+  next();
+};
+
+// Require tenant context for the request
+exports.requireTenant = async (req, res, next) => {
+  // Super admin can operate without tenant context
+  if (req.user && req.user.platformRole === 'superadmin') {
+    return next();
+  }
+
+  // Check if tenant is resolved
+  if (!req.tenant && !req.tenantId) {
+    // Try to get tenant from user
+    if (req.user && req.user.tenantId) {
+      const tenant = await Tenant.findById(req.user.tenantId);
+      if (!tenant) {
+        return res.status(404).json({
+          success: false,
+          message: 'User tenant not found'
+        });
+      }
+      if (tenant.status !== 'active') {
+        return res.status(403).json({
+          success: false,
+          message: `Tenant account is ${tenant.status}. Please contact support.`
+        });
+      }
+      req.tenant = tenant;
+      req.tenantId = tenant._id;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Tenant context required. Please provide X-Tenant-Id header.'
+      });
+    }
+  }
+
+  next();
+};
+
+// Validate user belongs to request tenant
+exports.validateUserTenant = (req, res, next) => {
+  // Super admin can access any tenant
+  if (req.user && req.user.platformRole === 'superadmin') {
+    return next();
+  }
+
+  // Tenant user must belong to the request tenant
+  if (req.user && req.user.tenantId && req.tenant) {
+    if (req.user.tenantId.toString() !== req.tenant._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. User does not belong to this tenant.'
+      });
+    }
+  }
+
+  next();
+};
+
+// Authorize roles for multi-tenant system
+exports.authorizeRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
+    // Super admin has all access
+    if (req.user.platformRole === 'superadmin') {
+      return next();
+    }
+
+    // Check tenant role for tenant users
+    const userRole = req.user.tenantRole || req.user.role;
+    if (!roles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: `Role '${userRole}' is not authorized to access this route`
+      });
+    }
+
+    next();
+  };
 };

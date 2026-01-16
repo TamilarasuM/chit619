@@ -31,6 +31,12 @@ const PartialPaymentSchema = new mongoose.Schema({
 }, { _id: true, timestamps: true });
 
 const PaymentSchema = new mongoose.Schema({
+  tenantId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tenant',
+    required: [true, 'Tenant is required'],
+    index: true
+  },
   chitGroupId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ChitGroup',

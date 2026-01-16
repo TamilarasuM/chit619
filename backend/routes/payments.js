@@ -6,12 +6,13 @@ const User = require('../models/User');
 const MemberRanking = require('../models/MemberRanking');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, requireTenant, validateUserTenant } = require('../middleware/auth');
+const { resolveTenant, getTenantFilter, addTenantToDocument } = require('../middleware/tenantResolver');
 
 // @desc    Get all payments (with filters)
 // @route   GET /api/payments
 // @access  Private/Admin
-router.get('/', protect, authorize('admin'), async (req, res) => {
+router.get('/', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const {
       chitId,
@@ -22,7 +23,8 @@ router.get('/', protect, authorize('admin'), async (req, res) => {
       limit = 20
     } = req.query;
 
-    const query = {};
+    // Start with tenant filter
+    const query = { ...getTenantFilter(req) };
 
     if (chitId) query.chitGroupId = chitId;
     if (memberId) query.memberId = memberId;
@@ -75,9 +77,10 @@ router.get('/', protect, authorize('admin'), async (req, res) => {
 // @desc    Get single payment
 // @route   GET /api/payments/:id
 // @access  Private
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
-    const payment = await Payment.findById(req.params.id)
+    const tenantFilter = getTenantFilter(req);
+    const payment = await Payment.findOne({ _id: req.params.id, ...tenantFilter })
       .populate('memberId', 'name phone email')
       .populate('chitGroupId', 'name chitAmount monthlyContribution')
       .populate('recordedBy', 'name');
@@ -113,7 +116,7 @@ router.get('/:id', protect, async (req, res) => {
 // @desc    Record payment (general - find or create payment record)
 // @route   POST /api/payments/record
 // @access  Private/Admin
-router.post('/record', protect, authorize('admin'), async (req, res) => {
+router.post('/record', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const {
       paymentId,
@@ -333,7 +336,7 @@ router.post('/record', protect, authorize('admin'), async (req, res) => {
 // @desc    Record payment (by payment ID)
 // @route   POST /api/payments/:id/record
 // @access  Private/Admin
-router.post('/:id/record', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/record', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const {
       amount,
@@ -498,11 +501,13 @@ router.post('/:id/record', protect, authorize('admin'), async (req, res) => {
 // @desc    Get pending payments
 // @route   GET /api/payments/status/pending
 // @access  Private/Admin
-router.get('/status/pending', protect, authorize('admin'), async (req, res) => {
+router.get('/status/pending', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const { chitId } = req.query;
+    const tenantFilter = getTenantFilter(req);
 
     const query = {
+      ...tenantFilter,
       paymentStatus: { $in: ['Pending', 'Partial'] }
     };
 
@@ -535,11 +540,13 @@ router.get('/status/pending', protect, authorize('admin'), async (req, res) => {
 // @desc    Get overdue payments
 // @route   GET /api/payments/status/overdue
 // @access  Private/Admin
-router.get('/status/overdue', protect, authorize('admin'), async (req, res) => {
+router.get('/status/overdue', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const { chitId, days } = req.query;
+    const tenantFilter = getTenantFilter(req);
 
     const query = {
+      ...tenantFilter,
       paymentStatus: { $in: ['Pending', 'Partial', 'Overdue'] }
     };
 
@@ -596,7 +603,7 @@ router.get('/status/overdue', protect, authorize('admin'), async (req, res) => {
 // @desc    Get member payments
 // @route   GET /api/payments/member/:memberId
 // @access  Private
-router.get('/member/:memberId', protect, async (req, res) => {
+router.get('/member/:memberId', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
     // If member, verify they can only see their own payments
     if (req.user.role === 'member' && req.params.memberId !== req.user.id) {
@@ -607,8 +614,9 @@ router.get('/member/:memberId', protect, async (req, res) => {
     }
 
     const { chitId, status } = req.query;
+    const tenantFilter = getTenantFilter(req);
 
-    const query = { memberId: req.params.memberId };
+    const query = { ...tenantFilter, memberId: req.params.memberId };
 
     if (chitId) query.chitGroupId = chitId;
     if (status) query.paymentStatus = status;
@@ -645,9 +653,10 @@ router.get('/member/:memberId', protect, async (req, res) => {
 // @desc    Get payments for a chit group
 // @route   GET /api/payments/chitgroup/:chitGroupId
 // @access  Private
-router.get('/chitgroup/:chitGroupId', protect, async (req, res) => {
+router.get('/chitgroup/:chitGroupId', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
-    const chitGroup = await ChitGroup.findById(req.params.chitGroupId);
+    const tenantFilter = getTenantFilter(req);
+    const chitGroup = await ChitGroup.findOne({ _id: req.params.chitGroupId, ...tenantFilter });
 
     if (!chitGroup) {
       return res.status(404).json({
@@ -721,7 +730,7 @@ router.get('/chitgroup/:chitGroupId', protect, async (req, res) => {
 // @desc    Extend grace period for a payment
 // @route   POST /api/payments/:id/extend-grace
 // @access  Private/Admin
-router.post('/:id/extend-grace', protect, authorize('admin'), async (req, res) => {
+router.post('/:id/extend-grace', protect, resolveTenant, requireTenant, validateUserTenant, authorize('admin'), async (req, res) => {
   try {
     const { additionalDays, reason } = req.body;
 
@@ -873,7 +882,7 @@ async function updateMemberRanking(memberId, chitGroupId) {
 // @desc    Get payments for a specific auction
 // @route   GET /api/payments/auction/:auctionId
 // @access  Private
-router.get('/auction/:auctionId', protect, async (req, res) => {
+router.get('/auction/:auctionId', protect, resolveTenant, requireTenant, validateUserTenant, async (req, res) => {
   try {
     const Auction = require('../models/Auction');
 

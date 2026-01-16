@@ -4,27 +4,42 @@ const User = require('../models/User');
 const ChitGroup = require('../models/ChitGroup');
 const Auction = require('../models/Auction');
 const Payment = require('../models/Payment');
-const { protect, isAdmin } = require('../middleware/auth');
+const { protect, isAdmin, isTenantAdmin, requireTenant } = require('../middleware/auth');
+const { resolveTenant, getTenantFilter } = require('../middleware/tenantResolver');
+
+// Helper to get tenant filter for queries
+const getFilter = (req) => {
+  // Super admin without tenant context sees all
+  if (req.user.platformRole === 'superadmin' && !req.tenantId) {
+    return {};
+  }
+  // Use tenant from request or user
+  const tenantId = req.tenantId || req.user.tenantId;
+  return tenantId ? { tenantId } : {};
+};
 
 // @desc    Get admin dashboard data
 // @route   GET /api/dashboard/admin
 // @access  Private/Admin
-router.get('/admin', protect, isAdmin, async (req, res) => {
+router.get('/admin', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    // Get counts
-    const totalMembers = await User.countDocuments({ role: 'member' });
-    const activeMembers = await User.countDocuments({ role: 'member', status: 'active' });
-    const suspendedMembers = await User.countDocuments({ role: 'member', status: 'suspended' });
+    const tenantFilter = getFilter(req);
+    const userTenantFilter = { ...tenantFilter, platformRole: 'tenant_user' };
 
-    const totalChitGroups = await ChitGroup.countDocuments();
-    const activeChitGroups = await ChitGroup.countDocuments({ status: 'Active' });
-    const inProgressChitGroups = await ChitGroup.countDocuments({ status: 'InProgress' });
-    const closedChitGroups = await ChitGroup.countDocuments({ status: 'Closed' });
+    // Get counts with tenant filtering
+    const totalMembers = await User.countDocuments({ ...userTenantFilter, tenantRole: 'member' });
+    const activeMembers = await User.countDocuments({ ...userTenantFilter, tenantRole: 'member', status: 'active' });
+    const suspendedMembers = await User.countDocuments({ ...userTenantFilter, tenantRole: 'member', status: 'suspended' });
+
+    const totalChitGroups = await ChitGroup.countDocuments(tenantFilter);
+    const activeChitGroups = await ChitGroup.countDocuments({ ...tenantFilter, status: 'Active' });
+    const inProgressChitGroups = await ChitGroup.countDocuments({ ...tenantFilter, status: 'InProgress' });
+    const closedChitGroups = await ChitGroup.countDocuments({ ...tenantFilter, status: 'Closed' });
 
     // Get active chit groups for financial calculations (use lean() to avoid population issues)
     let chitGroups = [];
     try {
-      const rawChitGroups = await ChitGroup.find({ status: { $in: ['Active', 'InProgress'] } })
+      const rawChitGroups = await ChitGroup.find({ ...tenantFilter, status: { $in: ['Active', 'InProgress'] } })
         .populate('members.memberId', 'name phone')
         .lean(); // Use lean() for performance and simpler error handling
 
@@ -36,7 +51,7 @@ router.get('/admin', protect, isAdmin, async (req, res) => {
     } catch (populateError) {
       console.error('Error populating chit groups:', populateError);
       // Fallback: get chit groups without population
-      chitGroups = await ChitGroup.find({ status: { $in: ['Active', 'InProgress'] } }).lean();
+      chitGroups = await ChitGroup.find({ ...tenantFilter, status: { $in: ['Active', 'InProgress'] } }).lean();
       chitGroups = chitGroups.map(chit => ({ ...chit, members: [] }));
     }
     const totalChitAmount = chitGroups.reduce((sum, chit) => sum + chit.chitAmount, 0);
@@ -58,7 +73,7 @@ router.get('/admin', protect, isAdmin, async (req, res) => {
     });
 
     // Get recent chit groups
-    const recentChitGroups = await ChitGroup.find()
+    const recentChitGroups = await ChitGroup.find(tenantFilter)
       .sort({ createdAt: -1 })
       .limit(5)
       .populate('createdBy', 'name')
@@ -79,7 +94,7 @@ router.get('/admin', protect, isAdmin, async (req, res) => {
     }));
 
     // Get recent members
-    const recentMembers = await User.find({ role: 'member' })
+    const recentMembers = await User.find({ ...userTenantFilter, tenantRole: 'member' })
       .sort({ createdAt: -1 })
       .limit(5)
       .select('name phone status createdAt');
@@ -184,15 +199,17 @@ router.get('/admin', protect, isAdmin, async (req, res) => {
 // @desc    Get member dashboard data
 // @route   GET /api/dashboard/member
 // @access  Private/Member
-router.get('/member', protect, async (req, res) => {
+router.get('/member', protect, resolveTenant, async (req, res) => {
   try {
     const userId = req.user.id;
+    const tenantFilter = getFilter(req);
 
     // Get user with chit groups
     const user = await User.findById(userId).populate('chitGroups');
 
-    // Get chit groups where user is a member
+    // Get chit groups where user is a member (with tenant filter)
     const memberChitGroups = await ChitGroup.find({
+      ...tenantFilter,
       'members.memberId': userId
     }).select('name chitAmount status completedAuctions duration members monthlyContribution');
 
@@ -353,9 +370,10 @@ router.get('/member', protect, async (req, res) => {
 // @desc    Get all members (for admin)
 // @route   GET /api/dashboard/members
 // @access  Private/Admin
-router.get('/members', protect, isAdmin, async (req, res) => {
+router.get('/members', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const members = await User.find({ role: 'member' })
+    const tenantFilter = getFilter(req);
+    const members = await User.find({ ...tenantFilter, platformRole: 'tenant_user', tenantRole: 'member' })
       .populate('chitGroups', 'name status')
       .sort({ createdAt: -1 });
 
@@ -393,9 +411,10 @@ router.get('/members', protect, isAdmin, async (req, res) => {
 // @desc    Get all chit groups (for admin)
 // @route   GET /api/dashboard/chitgroups
 // @access  Private/Admin
-router.get('/chitgroups', protect, isAdmin, async (req, res) => {
+router.get('/chitgroups', protect, resolveTenant, requireTenant, isTenantAdmin, async (req, res) => {
   try {
-    const chitGroups = await ChitGroup.find()
+    const tenantFilter = getFilter(req);
+    const chitGroups = await ChitGroup.find(tenantFilter)
       .populate('createdBy', 'name')
       .populate('members.memberId', 'name phone')
       .sort({ createdAt: -1 });
