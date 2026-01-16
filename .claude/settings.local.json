@@ -59,7 +59,8 @@
       "Bash(gh --version:*)",
       "Bash(echo:*)",
       "Bash(powershell -Command:*)",
-      "Bash(npm run server:*)"
+      "Bash(npm run server:*)",
+      "Bash(npx vercel --prod)"
     ],
     "deny": [],
     "ask": []

@@ -4,8 +4,8 @@ const TenantSchema = new mongoose.Schema({
   // Auto-generated unique tenant code (e.g., TN-000001)
   tenantCode: {
     type: String,
-    unique: true,
-    index: true
+    unique: true
+    // Note: unique: true automatically creates an index
   },
   name: {
     type: String,
